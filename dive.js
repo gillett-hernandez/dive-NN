@@ -1,6 +1,14 @@
 var N_PLAYERS = 1000;
 var players = [];
 
+function Brain(player) {
+	this.matrix = Matrix()
+	this.evaluate = function(){
+		return 
+	}
+	return this
+}
+
 function Player() {
 	this.x = 0;
 	this.y = 0;
@@ -8,6 +16,7 @@ function Player() {
 	this.vy = 0;
 	this.theta = 0;
 	this.intent = 0;
+	this.brain = new Brain(this)
 	return this
 }
 
@@ -42,8 +51,10 @@ function simulate(player){
 }
 
 function update(player){
-    // player.intent += (player.intent+1)*random(-2,2)
+	player.theta = player.brain.evaluate()
+    // player.intent += (player.intent+1)*random(-6,6)
     // player.theta = PI+HALF_PI+(HALF_PI + atan(player.intent))/2
+	// player.theta = randomGaussian(HALF_PI + PI, TAU)
 }
 
 
@@ -51,6 +62,10 @@ function update(player){
 function setup() {
 	createCanvas(1000, 1000);
 	background(100);
+	// for (var i = 0; i < 8; i++){
+	// 	print(cos(TAU*i/8), sin(TAU*i/8));
+	// }
+	// print(cos(PI+HALF_PI), sin(PI+HALF_PI))
 	for (var i = 0; i < N_PLAYERS; i++) {
 		var player = new Player();
 		player.theta = random(PI+HALF_PI, TAU);
