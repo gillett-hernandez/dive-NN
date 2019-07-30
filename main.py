@@ -11,7 +11,7 @@ from math import hypot as mag
 HALF_PI = PI/2
 TAU = PI*2
 
-N_PLAYERS = 500
+N_PLAYERS = 1000
 g = 9.80665
 f = 0.1
 m = 100
@@ -20,7 +20,7 @@ influence = 8
 timedelta = 1.0
 N_PARAMS = 7
 MUTATION_EFFECT = 0.10
-MUTATION_CHANCE = 0.20
+MUTATION_CHANCE = 0.10
 TTL = 1000
 BATCHES = 100
 
@@ -29,7 +29,7 @@ def crossover(player1, player2):
     bits = rand.choices([0,1], k=N_PARAMS)
     params1 = player1.brain.params
     params2 = player2.brain.params
-    new_player = Player()
+    new_player = Player(player1.target)
     new_player.brain.params = [[params1[i], params2[i]][bit] for i, bit in enumerate(bits)]
     return new_player
 
