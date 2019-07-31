@@ -167,6 +167,7 @@ def main():
     WHITE = pygame.Color(255, 255, 255)
     GREEN = pygame.Color(0, 255, 0)
     RED = pygame.Color(255, 0, 0)
+    GREY = pygame.Color(127,127,127)
 
     FLOOR = 10000
     DEST = 10000, FLOOR
@@ -195,7 +196,7 @@ def main():
 
         screen.fill(WHITE)
 
-        pygame.draw.rect(screen, pygame.color.Color(128,128,128), pygame.Rect(vadd(OFFSET, (0,0)), list(int(e/scale) for e in DEST)))
+        pygame.draw.rect(screen, GREY, pygame.Rect(vadd(OFFSET, (0,0)), list(int(e/scale) for e in DEST)))
         pygame.draw.circle(screen, GREEN, vadd(OFFSET, (0,0)), 5)
         pygame.draw.circle(screen, RED, vadd(OFFSET, list(int(e/scale) for e in DEST)), 5)
 
