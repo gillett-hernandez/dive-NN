@@ -19,7 +19,7 @@ mass = 100
 scale = 15
 influence = 700
 timedelta = 0.1
-N_PARAMS = 7
+N_PARAMS = 8
 MUTATION_EFFECT = 0.05
 MUTATION_CHANCE = 0.10
 TTL = 1000
@@ -34,6 +34,7 @@ def crossover(player1, player2):
     params1 = player1.brain.params
     params2 = player2.brain.params
     new_player = Player(player1.target)
+    print(len(params1), N_PARAMS)
     new_player.brain.params = [[params1[i], params2[i]][bit] for i, bit in enumerate(bits)]
     return new_player
 
@@ -81,7 +82,7 @@ def vsub(l1, l2):
 class Brain:
     def __init__(self, player):
         self.player = player
-        self.params = [random(-2,2) for _ in range(N_PARAMS+1)]
+        self.params = [random(-2,2) for _ in range(N_PARAMS)]
         # self.bias = random(-2,2)
 
     def evaluate(self):
@@ -185,7 +186,11 @@ def main():
     for i in range(N_PLAYERS):
         players.append(Player(DEST))
         if should_read_training_data:
-            players[-1].brain.params = data["training_data"][i]
+            if "version" not in data or data["version"] < 1:
+                length_difference = len(players[-1].brain.params) - len(data["training_data"][i])
+                players[-1].brain.params = data["training_data"][i] + [0] * length_difference
+            else:
+                players[-1].brain.params = data["training_data"][i]
     userPlayer = Player(DEST)
     best_fitness = float("inf")
 
@@ -254,7 +259,7 @@ def main():
             pygame.display.flip()
         best_fitness = min(*[e.fitness for e in players])
         players = selection_crossover_and_breeding(players)
-        new_target = random(2000,10000), FLOOR
+        new_target = random(3000,10000), FLOOR
         for player in players:
             player.reset()
             player.target = new_target
