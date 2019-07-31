@@ -6,23 +6,27 @@ import random as rand
 from math import pi as PI
 from math import cos, sin, atan2, atan, tanh, fmod
 from math import hypot as mag
+import json
 # import tensorflow as tf
 
 HALF_PI = PI/2
 TAU = PI*2
 
-N_PLAYERS = 1000
+N_PLAYERS = 2*160
 g = 9.80665
 f = 0.1
-m = 100
-scale = 20
-influence = 8
-timedelta = 1.0
+mass = 100
+scale = 15
+influence = 700
+timedelta = 0.1
 N_PARAMS = 7
-MUTATION_EFFECT = 0.10
+MUTATION_EFFECT = 0.05
 MUTATION_CHANCE = 0.10
 TTL = 1000
 BATCHES = 100
+OFFSET = (100,100)
+should_write_training_data = True
+should_read_training_data = True
 
 def crossover(player1, player2):
     # bits are basically the binary choices for which parameter to take from which parent
@@ -37,7 +41,8 @@ def mutation(player):
     for i, param in enumerate(player.brain.params):
         if random(0,1) < MUTATION_CHANCE:
             print("mutation occurred!")
-            player.brain.params[i] = random(-MUTATION_EFFECT, MUTATION_EFFECT) + param
+            # player.brain.params[i] = random(-MUTATION_EFFECT, MUTATION_EFFECT) + param
+            player.brain.params[i] = rand.gauss(0, 2*MUTATION_EFFECT) + param
 
 
 def selection_crossover_and_breeding(players):
@@ -45,12 +50,14 @@ def selection_crossover_and_breeding(players):
     # sort by fitness, lower is better
     players.sort(key=lambda e: e.fitness)
     # truncate 50% worst players
-    players = players[:1+int(len(players)/2)]
+    players = players[:int(len(players)/2)]
+    # keep the greatest players
+    new_players.extend(players)
     # shuffle players so we can split them into random batches
     rand.shuffle(players)
     # zip through and breed players
-    for i, (player1, player2) in enumerate(zip(players[:1+int(len(players)/2)], players[1+int(len(players)/2):])):
-        for k in range(4):
+    for i, (player1, player2) in enumerate(zip(players[:int(len(players)/2)], players[int(len(players)/2):])):
+        for k in range(2):
             # random crossover
             new_player = crossover(player1, player2)
             # random mutations
@@ -100,24 +107,28 @@ class Player:
         self.y = 0
         self.vx = 0
         self.vy = 0
-        self.theta = 0
         # self.intent = 0
+        self.theta = 0
         self.brain = Brain(self)
+        self.target = target
+        self.theta = self.brain.evaluate()
         self.alive = True
         self.fitness = None
-        self.target = target
         self.time = 0
 
     def simulate(self):
         if not self.alive:
             return
         vx, vy = self.vx, self.vy
+        ax, ay = 0, 0
         
-        vx += influence*cos(self.theta)
-        vy += influence*sin(self.theta) - g
+        ax += influence*cos(self.theta)
+        ay += -influence*sin(self.theta) - g*mass
         _mag = mag(vx, vy)
-        vx -= f*vx
-        vy -= f*vy
+        ax -= f*_mag*vx
+        ay -= f*_mag*vy
+        vx += ax/mass
+        vy += ay/mass
         self.vx, self.vy = vx, vy
         self.x += self.vx*timedelta
         self.y -= self.vy*timedelta
@@ -135,12 +146,16 @@ class Player:
         self.theta = self.brain.evaluate()
 
     def out_of_bounds(self):
-        return self.x < 0 or self.x > self.target[0] or self.y > self.target[1] or self.y < 0
+        return self.x < 0 or self.y > self.target[1]
 
     def copy(self):
         cp = Player(self.target)
         cp.brain.params = self.brain.params
         return cp
+
+    def transform_pos(self):
+        """returns the coordinates to draw self to the screen"""
+        return vadd(OFFSET, (int(self.x/scale), int(self.y/scale)))
 
 def main():
     pygame.init()
@@ -152,26 +167,35 @@ def main():
     WHITE = pygame.Color(255, 255, 255)
     GREEN = pygame.Color(0, 255, 0)
     RED = pygame.Color(255, 0, 0)
-    OFFSET = (300,300)
-    DEST = 10000,10000
+
+    FLOOR = 10000
+    DEST = 10000, FLOOR
 
     WHITE_SURFACE = pygame.Surface((SIZE))
     WHITE_SURFACE.fill(WHITE)
 
     font = pygame.font.SysFont(pygame.font.get_default_font(), 22)
 
+    if should_read_training_data:
+        with open("save_data.json", "r") as fd:
+            data = json.load(fd)
+
     players = []
     for i in range(N_PLAYERS):
         players.append(Player(DEST))
-        player = players[-1]
-        player.theta = random(PI+HALF_PI, TAU)
-
+        if should_read_training_data:
+            players[-1].brain.params = data["training_data"][i]
+    userPlayer = Player(DEST)
+    best_fitness = float("inf")
 
     for i in range(BATCHES):
+        print(f"batch {i} of {BATCHES} = {round(100*i/BATCHES,2)}% done")
+        print(f"best fitness was {best_fitness}")
         halted = False
 
         screen.fill(WHITE)
 
+        pygame.draw.rect(screen, pygame.color.Color(128,128,128), pygame.Rect(vadd(OFFSET, (0,0)), list(int(e/scale) for e in DEST)))
         pygame.draw.circle(screen, GREEN, vadd(OFFSET, (0,0)), 5)
         pygame.draw.circle(screen, RED, vadd(OFFSET, list(int(e/scale) for e in DEST)), 5)
 
@@ -195,17 +219,30 @@ def main():
                 player.update()
                 if player.alive and player.out_of_bounds():
                     player.alive = False
-                    player.fitness = mag(*vsub(player.target, [player.x, player.y]))**2 + player.time**0.5
-                    pygame.draw.circle(screen, RED, vadd(OFFSET, (int(player.x/scale), int(player.y/scale))), 3)
+                    player.fitness = mag(*vsub(player.target, [player.x, player.y]))**2 + player.time
+                    print(player.fitness)
+                    pygame.draw.circle(screen, RED, player.transform_pos(), 3)
                     alive_players_count -= 1
                     continue
                 if player.alive and player.time > TTL:
                     player.alive = False
-                    player.fitness = mag(*vsub(player.target, [player.x, player.y]))**2 + player.time**0.5
-                    pygame.draw.circle(screen, RED, vadd(OFFSET, (int(player.x/scale), int(player.y/scale))), 3)
+                    player.fitness = mag(*vsub(player.target, [player.x, player.y]))**2 + player.time
+                    print(player.fitness)
+                    pygame.draw.circle(screen, RED, player.transform_pos(), 3)
                     alive_players_count -= 1
                     continue
-                pygame.draw.circle(screen, BLACK, vadd(OFFSET, (int(player.x/scale), int(player.y/scale))), 1)
+                pygame.draw.circle(screen, BLACK, player.transform_pos(), 1)
+
+            userPlayer.simulate()
+            userPlayer.theta = atan2(*vsub([x*scale for x in vsub(pygame.mouse.get_pos()[::-1], OFFSET)], [userPlayer.y, userPlayer.x]))
+            # print(userPlayer.theta)
+            if userPlayer.alive and userPlayer.out_of_bounds():
+                userPlayer.alive = False
+            if userPlayer.alive and userPlayer.time > TTL:
+                userPlayer.alive = False
+            pygame.draw.circle(screen, GREEN, userPlayer.transform_pos(), 1)
+            pygame.draw.line(screen, RED, userPlayer.transform_pos(), vadd([3*influence*cos(userPlayer.theta)/mass, 3*influence*sin(userPlayer.theta)/mass], userPlayer.transform_pos()), 1)
+
             render_str = f"alive players = {alive_players_count}"
             screen.blit(WHITE_SURFACE, (WIDTH-200, 10, *font.size(render_str)))
             screen.blit(font.render(render_str, False, BLACK), (WIDTH-200, 10))
@@ -214,9 +251,23 @@ def main():
 
             
             pygame.display.flip()
+        best_fitness = min(*[e.fitness for e in players])
         players = selection_crossover_and_breeding(players)
+        new_target = random(2000,10000), FLOOR
         for player in players:
             player.reset()
+            player.target = new_target
+        DEST = new_target
+        userPlayer.reset()
+    if should_write_training_data:
+        with open("save_data.json", "w") as fd:
+            training_data = {"training_data": [player.brain.params for player in players]}
+            json.dump(training_data, fd, indent=4)
+            # fd.write("{\n")
+            # for player in players:
+            #     fd.write("\t[" + ", ".join(str(e) for e in player.brain.params) + "],\n")
+            # fd.write("}\n")
+
 
 if __name__ == '__main__':
     main()
