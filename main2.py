@@ -7,7 +7,7 @@ from math import pi as PI
 from math import cos, sin, atan2, atan, tanh, fmod
 from math import hypot as mag
 import json
-# import tensorflow as tf
+import tensorflow as tf
 
 HALF_PI = PI/2
 TAU = PI*2
@@ -19,54 +19,54 @@ mass = 100
 scale = 15
 influence = 700
 timedelta = 0.1
-N_PARAMS = 8
+N_PARAMS = 7
 MUTATION_EFFECT = 0.05
 MUTATION_CHANCE = 0.10
 TTL = 1000
 BATCHES = 100
 OFFSET = (100,100)
 should_write_training_data = True
-should_read_training_data = True
+should_read_training_data = False
 
-def crossover(player1, player2):
-    # bits are basically the binary choices for which parameter to take from which parent
-    bits = rand.choices([0,1], k=N_PARAMS)
-    params1 = player1.brain.params
-    params2 = player2.brain.params
-    new_player = Player(player1.target)
-    print(len(params1), N_PARAMS)
-    new_player.brain.params = [[params1[i], params2[i]][bit] for i, bit in enumerate(bits)]
-    return new_player
+# def crossover(player1, player2):
+#     # bits are basically the binary choices for which parameter to take from which parent
+#     bits = rand.choices([0,1], k=player1.brain.number_of_params)
+#     params1 = player1.brain.params
+#     params2 = player2.brain.params
+#     new_player = Player(player1.target)
+#     print(len(params1), N_PARAMS)
+#     new_player.brain.params = [[params1[i], params2[i]][bit] for i, bit in enumerate(bits)]
+#     return new_player
 
-def mutation(player):
-    for i, param in enumerate(player.brain.params):
-        if random(0,1) < MUTATION_CHANCE:
-            print("mutation occurred!")
-            # player.brain.params[i] = random(-MUTATION_EFFECT, MUTATION_EFFECT) + param
-            player.brain.params[i] = rand.gauss(0, 2*MUTATION_EFFECT) + param
+# def mutation(player):
+#     for i, param in enumerate(player.brain.params):
+#         if random(0,1) < MUTATION_CHANCE:
+#             print("mutation occurred!")
+#             # player.brain.params[i] = random(-MUTATION_EFFECT, MUTATION_EFFECT) + param
+#             player.brain.params[i] = rand.gauss(0, 2*MUTATION_EFFECT) + param
 
 
-def selection_crossover_and_breeding(players):
-    new_players = []
-    # sort by fitness, lower is better
-    players.sort(key=lambda e: e.fitness)
-    # truncate 50% worst players
-    players = players[:int(len(players)/2)]
-    # keep the greatest players
-    new_players.extend(players)
-    # shuffle players so we can split them into random batches
-    rand.shuffle(players)
-    # zip through and breed players
-    for i, (player1, player2) in enumerate(zip(players[:int(len(players)/2)], players[int(len(players)/2):])):
-        for k in range(2):
-            # random crossover
-            new_player = crossover(player1, player2)
-            # random mutations
-            mutation(new_player)
-            new_players.append(new_player)
-    print("selected best, and bred")
-    assert len(new_players) == N_PLAYERS, (len(new_players), N_PLAYERS)
-    return new_players
+# def selection_crossover_and_breeding(players):
+#     new_players = []
+#     # sort by fitness, lower is better
+#     players.sort(key=lambda e: e.fitness)
+#     # truncate 50% worst players
+#     players = players[:int(len(players)/2)]
+#     # keep the greatest players
+#     new_players.extend(players)
+#     # shuffle players so we can split them into random batches
+#     rand.shuffle(players)
+#     # zip through and breed players
+#     for i, (player1, player2) in enumerate(zip(players[:int(len(players)/2)], players[int(len(players)/2):])):
+#         for k in range(2):
+#             # random crossover
+#             new_player = crossover(player1, player2)
+#             # random mutations
+#             mutation(new_player)
+#             new_players.append(new_player)
+#     print("selected best, and bred")
+#     assert len(new_players) == N_PLAYERS, (len(new_players), N_PLAYERS)
+#     return new_players
 
 def sign(x):
     return 1 if x >= 0 else -1
@@ -79,40 +79,51 @@ def vadd(l1, l2):
 def vsub(l1, l2):
     return l1[0] - l2[0], l1[1] - l2[1]
 
-class Brain:
-    def __init__(self, player):
-        self.player = player
-        self.params = [random(-2,2) for _ in range(N_PARAMS)]
+class Brain(tf.keras.Model):
+    def __init__(self):
+        # self.player = player
+        # self.layer1 = np.matrix([random(-2,2) for _ in range(N_PARAMS**2)]).reshape((N_PARAMS, N_PARAMS))
+        # self.bias1 = np.matrix([random(-2,2) for _ in range(N_PARAMS)])
+        # self.output = np.matrix([random(-2,2) for _ in range(N_PARAMS)]).T
+        # self.bias_output = np.matrix([random(-2,2)])
+        self.model = 
+        # self.number_of_params = len(self.layer1) + len(self.bias1) + len(self.output) + len(self.bias_output)
+
         # self.bias = random(-2,2)
 
-    def evaluate(self):
-        S = fmod(self.params[-1] + sum(p*s for p,s in zip(self.params,
-            [
-                self.player.x,
-                self.player.y,
-                mag(self.player.vx, self.player.vy),
-                atan2(self.player.vy,self.player.vx),
-                self.player.theta,
-                mag(*vsub(self.player.target, [self.player.x, self.player.y])),
-                atan2(*vsub(self.player.target, [self.player.x, self.player.y]))
-            ]
-            )), TAU)
+    def evaluate(self, player):
+        stats = np.matrix([
+            player.x,
+            player.y,
+            mag(player.vx, player.vy),
+            atan2(player.vy,player.vx),
+            player.theta,
+            mag(*vsub(player.target, [player.x, player.y])),
+            atan2(*vsub(player.target, [player.x, player.y]))
+        ]).T
+        # print(stats, stats.shape)
+        output1 = (self.layer1 * stats + self.bias1).T
+        # print(output1.shape)
+        output2 = (self.bias_output + output1 * self.output)
+        # print(output2.shape)
+        S = fmod(output2[0], TAU)
+
         # S = sum(p*p2*s for p,s,p2 in zip(self.params, [self.player.x, self.player.y, mag(self.player.vx, self.player.vy), atan2(self.player.vy,self.player.vx), self.player.theta], self.params2))
         # print(S)
         return S
 
 class Player:
-    __slots__ = ["x", "y", "vx", "vy", "theta", "brain", "alive", "target", "time", "fitness"]
-    def __init__(self, target):
+    brain = Brain()
+    __slots__ = ["x", "y", "vx", "vy", "theta", "alive", "target", "time", "fitness"]
+    def __init__(self, target, theta=0):
         self.x = 0
         self.y = 0
         self.vx = 0
         self.vy = 0
         # self.intent = 0
         self.theta = 0
-        self.brain = Brain(self)
         self.target = target
-        self.theta = self.brain.evaluate()
+        self.theta = self.brain.evaluate(self)
         self.alive = True
         self.fitness = None
         self.time = 0
@@ -136,15 +147,13 @@ class Player:
         self.time += timedelta
 
     def reset(self):
-        self.x = 0
-        self.y = 0
-        self.vx, self.vy = 0, 0
+        self.x, self.y, self.vx, self.vy, self.time = 0, 0, 0, 0, 0
+        self.theta = random(0,TAU)
         self.alive = True
-        self.time = 0
         self.fitness = None
 
     def update(self):
-        self.theta = self.brain.evaluate()
+        self.theta = self.brain.evaluate(self)
 
     def out_of_bounds(self):
         return self.x < 0 or self.y > self.target[1]
@@ -185,6 +194,7 @@ def main():
     players = []
     for i in range(N_PLAYERS):
         players.append(Player(DEST))
+        players[-1].theta = random(0,TAU)
         if should_read_training_data:
             if "version" not in data or data["version"] < 1:
                 length_difference = len(players[-1].brain.params) - len(data["training_data"][i])
@@ -258,7 +268,8 @@ def main():
             
             pygame.display.flip()
         best_fitness = min(*[e.fitness for e in players])
-        players = selection_crossover_and_breeding(players)
+        # players = selection_crossover_and_breeding(players)
+
         new_target = random(3000,10000), FLOOR
         for player in players:
             player.reset()
