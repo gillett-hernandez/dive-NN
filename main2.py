@@ -1,4 +1,24 @@
-HEADLESS = True
+#!/usr/bin/env python3
+import argparse
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--headless", action="store_true")
+parser.add_argument("--read-data", action="store_true")
+parser.add_argument("--write-data", action="store_true")
+parser.add_argument("--frameskip", type=int, default=1)
+parser.add_argument("--batches", type=int, default=100)
+parser.add_argument("--n-players", type=int, default=512)
+
+
+args = parser.parse_args()
+
+HEADLESS = args.headless
+FRAMESKIP = args.frameskip
+should_write_training_data = args.write_data
+should_read_training_data = args.read_data
+BATCHES = args.batches
+N_PLAYERS = args.n_players
+
 if not HEADLESS:
     import pygame
     from pygame.locals import *
@@ -17,28 +37,25 @@ import json
 HALF_PI = PI / 2
 TAU = PI * 2
 
-N_PLAYERS = 512
 g = 9.80665
-f = 0.1
+f = 0.05
 mass = 100
 scale = 15
-influence = 700
-timedelta = 0.1
-N_PARAMS = 11
+influence = 900
+
 MUTATION_EFFECT = 0.10
 MUTATION_CHANCE = 0.20
+timedelta = 0.1
+
+N_PARAMS = 11
 TTL = 1000
-BATCHES = 100
 OFFSET = (50, 50)
-should_write_training_data = True
-should_read_training_data = True
 RANDOM_LOWER_BOUND = 9000
 RANDOM_UPPER_BOUND = 9000
 PARAM_LOWER_BOUND = -3
 PARAM_UPPER_BOUND = 3
 RANDOM_INITIAL = 9000
 # only show every FRAMESKIP frame
-FRAMESKIP = 10
 
 
 def crossover(flyer1, flyer2):
@@ -176,7 +193,7 @@ class Player:
         self.theta = self.brain.evaluate()
 
     def out_of_bounds(self):
-        return self.x < 0 or self.y > self.target[1]
+        return self.x < -10 or self.y > self.target[1]
 
     def copy(self):
         cp = Player(self.target, params=self.brain.params[:])
