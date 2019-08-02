@@ -7,7 +7,7 @@ parser.add_argument("--read-data", action="store_true")
 parser.add_argument("--write-data", action="store_true")
 parser.add_argument("--frameskip", type=int, default=1)
 parser.add_argument("--batches", type=int, default=100)
-parser.add_argument("--n-players", type=int, default=512)
+parser.add_argument("--n-players", type=int, default=1024)
 
 
 args = parser.parse_args()
@@ -30,6 +30,7 @@ from math import pi as PI
 from math import cos, sin, atan2, atan, tanh, fmod, exp
 from math import hypot as mag
 import json
+from itertools import takewhile
 
 # import tensorflow as tf
 
@@ -38,12 +39,13 @@ HALF_PI = PI / 2
 TAU = PI * 2
 
 g = 9.80665
-f = 0.05
+fx = 0.02
+fy = 0.05
 mass = 100
 scale = 15
 influence = 900
 
-MUTATION_EFFECT = 0.10
+MUTATION_EFFECT = 0.20
 MUTATION_CHANCE = 0.20
 timedelta = 0.1
 
@@ -55,12 +57,16 @@ RANDOM_UPPER_BOUND = 9000
 PARAM_LOWER_BOUND = -3
 PARAM_UPPER_BOUND = 3
 RANDOM_INITIAL = 9000
-# only show every FRAMESKIP frame
+FITNESS_HYPERPARAMETER_WIDTH=10000
+FITNESS_HYPERPARAMETER_HEIGHT=30000
 
 
 def crossover(flyer1, flyer2):
     # bits are basically the binary choices for which parameter to take from which parent
-    bits = rand.choices([0, 1], k=N_PARAMS)
+    if hasattr(rand, "choices"):
+        bits = rand.choices([0, 1], k=N_PARAMS)
+    else:
+        bits = [rand.choice([0, 1]) for _ in range(N_PARAMS)]
     params1 = flyer1.brain.params
     params2 = flyer2.brain.params
     new_flyer = Player(flyer1.target)
@@ -76,6 +82,14 @@ def mutation(flyer):
             flyer.brain.params[i] = rand.gauss(0, 2 * MUTATION_EFFECT) + param
 
 
+def generate_children(players):
+    while True:
+        flyer1, flyer2 = rand.sample(players, 2)
+        new_flyer = crossover(flyer1, flyer2)
+        mutation(new_flyer)
+        yield new_flyer
+
+
 def selection_crossover_and_breeding(flyers):
     new_flyers = []
     # sort by fitness, lower is better
@@ -87,13 +101,10 @@ def selection_crossover_and_breeding(flyers):
     # shuffle flyers so we can split them into random batches
     rand.shuffle(flyers)
     # zip through and breed flyers
-    for i, (flyer1, flyer2) in enumerate(zip(flyers[: int(len(flyers) / 2)], flyers[int(len(flyers) / 2) :])):
-        for k in range(2):
-            # random crossover
-            new_flyer = crossover(flyer1, flyer2)
-            # random mutations
-            mutation(new_flyer)
-            new_flyers.append(new_flyer)
+    for i, new_flyer in zip(range(int(len(flyers)//4)), generate_children(flyers)):
+        new_flyers.append(new_flyer)
+    while len(new_flyers) < N_PLAYERS:
+        new_flyers.append(Player(new_flyers[-1].target))
     assert len(new_flyers) == N_PLAYERS, (len(new_flyers), N_PLAYERS)
     return new_flyers
 
@@ -174,8 +185,8 @@ class Player:
         ax += influence * cos(self.theta)
         ay += -influence * sin(self.theta) - g * mass
         _mag = mag(vx, vy)
-        ax -= f * _mag * vx
-        ay -= f * _mag * vy
+        ax -= fx * _mag * vx
+        ay -= fy * _mag * vy
         vx += ax / mass
         vy += ay / mass
         self.vx, self.vy = vx, vy
@@ -193,11 +204,10 @@ class Player:
         self.theta = self.brain.evaluate()
 
     def out_of_bounds(self):
-        return self.x < -10 or self.y > self.target[1]
+        return self.x < -100 or self.y > self.target[1]
 
     def copy(self):
-        cp = Player(self.target, params=self.brain.params[:])
-        return cp
+        return Player(self.target, params=self.brain.params[:])
 
     def transform_pos(self):
         """returns the coordinates to draw self to the screen"""
@@ -205,7 +215,7 @@ class Player:
 
 
 def fitness_formula(flyer):
-    return 1000 * exp(-(mag(*vsub(flyer.target, [flyer.x, flyer.y])) / 1000) ** 2) - flyer.time
+    return FITNESS_HYPERPARAMETER_HEIGHT * exp(-(mag(*vsub(flyer.target, [flyer.x, flyer.y])) / FITNESS_HYPERPARAMETER_WIDTH) ** 2) - flyer.time
 
 
 def main():
