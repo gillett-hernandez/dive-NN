@@ -9,6 +9,8 @@ from math import hypot as mag
 import json
 import tensorflow as tf
 
+tf.enable_eager_execution()
+
 HALF_PI = PI/2
 TAU = PI*2
 
@@ -79,14 +81,21 @@ def vadd(l1, l2):
 def vsub(l1, l2):
     return l1[0] - l2[0], l1[1] - l2[1]
 
-class Brain(tf.keras.Model):
+# class Brain(tf.keras.Model):
+class Brain:
     def __init__(self):
+        # super(Brain, self).__init__()
+        # self.dense1 = tf.keras.layers.Dense(units=49)
         # self.player = player
         # self.layer1 = np.matrix([random(-2,2) for _ in range(N_PARAMS**2)]).reshape((N_PARAMS, N_PARAMS))
         # self.bias1 = np.matrix([random(-2,2) for _ in range(N_PARAMS)])
         # self.output = np.matrix([random(-2,2) for _ in range(N_PARAMS)]).T
         # self.bias_output = np.matrix([random(-2,2)])
-        self.model = 
+        self.model = tf.keras.Sequential([
+            tf.keras.layers.Dense(7, input_shape=(7,)),  # must declare input shape
+            tf.keras.layers.Dense(1)
+        ])
+
         # self.number_of_params = len(self.layer1) + len(self.bias1) + len(self.output) + len(self.bias_output)
 
         # self.bias = random(-2,2)
@@ -100,13 +109,14 @@ class Brain(tf.keras.Model):
             player.theta,
             mag(*vsub(player.target, [player.x, player.y])),
             atan2(*vsub(player.target, [player.x, player.y]))
-        ]).T
-        # print(stats, stats.shape)
-        output1 = (self.layer1 * stats + self.bias1).T
-        # print(output1.shape)
-        output2 = (self.bias_output + output1 * self.output)
+        ])
+        # # print(stats, stats.shape)
+        # output1 = (self.layer1 * stats + self.bias1).T
+        # # print(output1.shape)
+        # output2 = (self.bias_output + output1 * self.output)
         # print(output2.shape)
-        S = fmod(output2[0], TAU)
+        # S = fmod(output2[0], TAU)
+        S = fmod(self.model.predict(stats)[0], TAU)
 
         # S = sum(p*p2*s for p,s,p2 in zip(self.params, [self.player.x, self.player.y, mag(self.player.vx, self.player.vy), atan2(self.player.vy,self.player.vx), self.player.theta], self.params2))
         # print(S)
@@ -153,10 +163,11 @@ class Player:
         self.fitness = None
 
     def update(self):
+        # pass
         self.theta = self.brain.evaluate(self)
 
     def out_of_bounds(self):
-        return self.x < 0 or self.y > self.target[1]
+        return self.x < -100 or self.y > self.target[1]
 
     def copy(self):
         cp = Player(self.target)
@@ -276,14 +287,14 @@ def main():
             player.target = new_target
         DEST = new_target
         userPlayer.reset()
-    if should_write_training_data:
-        with open("save_data.json", "w") as fd:
-            training_data = {"training_data": [player.brain.params for player in players]}
-            json.dump(training_data, fd, indent=4)
-            # fd.write("{\n")
-            # for player in players:
-            #     fd.write("\t[" + ", ".join(str(e) for e in player.brain.params) + "],\n")
-            # fd.write("}\n")
+    # if should_write_training_data:
+    #     with open("save_data.json", "w") as fd:
+    #         training_data = {"training_data": [player.brain.params for player in players]}
+    #         json.dump(training_data, fd, indent=4)
+    #         fd.write("{\n")
+    #         for player in players:
+    #             fd.write("\t[" + ", ".join(str(e) for e in player.brain.params) + "],\n")
+    #         fd.write("}\n")
 
 
 if __name__ == '__main__':
