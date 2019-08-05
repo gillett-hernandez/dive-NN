@@ -17,10 +17,10 @@ TAU = PI * 2
 
 N_PLAYERS = 8
 g = 9.80665
-g = 4
-drag_flat = 0.1
+g = 1
+drag_flat = 0.10
 drag_narrow = 0.05
-mass = 100
+mass = 80
 scale = 15
 influence = 700
 timedelta = 0.1
@@ -127,7 +127,7 @@ class Player:
     def __init__(self, target):
         self.x = 0
         self.y = 0
-        self.vx = 0
+        self.vx = 20
         self.vy = 0
         # self.intent = 0
         self.theta = 0
@@ -144,25 +144,23 @@ class Player:
 
     @property
     def AoA(self):
-        # return atan(self.vx/self.vy)
-        return fmod(self.direction - self.theta, TAU)
+        # return atan2(self.vy, self.vx)
+        return self.theta - self.direction
 
     @property
     def mag(self):
         return mag(self.vx, self.vy)
 
+    @property
     def lift_force(self):
         # angle = (self.theta - self.direction) % TAU
 
-        y = 2*1.225 * 0.75 * 0.5 / (2*mass)
-        CI = TAU*self.AoA
-        if self.AoA < HALF_PI/2:
-            # normal lift
-            # MAGIC NUMBER = air density (r) * airfoil area (A) = 1.225 * 0.75
-            return y * CI * self.mag**2
-        else:
-            # drag and not much lift
-            return y*CI*self.mag**2
+        y = 0.7 * 1.225 * 0.75 / (2*mass)
+        # CI = TAU*self.AoA
+        CI = 1
+        # normal lift
+        mul = 30*y * CI * self.mag**2 * cos(self.AoA) * sin(self.AoA)
+        return [mul * x for x in [cos(HALF_PI + self.direction), sin(HALF_PI + self.direction)]]
 
     def simulate(self):
         if not self.alive:
@@ -175,18 +173,18 @@ class Player:
         # gravity
         # lift is related to the difference of movement angle and pointing angle
         # it points in the perpendicular to the direction of motion, favoring the side that the pointing angle is on.
-        
-        L = self.lift_force()
-        ax = L*sin(HALF_PI + PI + self.AoA)
+        L = self.lift_force
+        ax = L[0]
         # ax += influence * cos(self.theta)
-        ay = L*cos(HALF_PI + PI + self.AoA) - g * mass
-        # ay += -influence * sin(self.theta) - g * mass
+        ay = L[1] - g * mass
+        # ay += -influence * sin(self.theta) -0 g * mass
         _mag = self.mag
-        f = drag_narrow if abs(sin(self.AoA)) < 0.3 else drag_flat
+        # f = drag_narrow if abs(sin(self.AoA)) < 0.3 else drag_flat
+        f = drag_flat
         ax -= f * _mag * vx
         ay -= f * _mag * vy
-        ax *= timedelta
-        ay *= timedelta
+        ax *= 1
+        ay *= 1
         vx += ax / mass
         vy += ay / mass
         self.vx, self.vy = vx, vy
@@ -198,6 +196,7 @@ class Player:
         self.x = 0
         self.y = 0
         self.vx, self.vy = 0, 0
+        self.vx = 20
         self.alive = True
         self.time = 0
         self.fitness = None
@@ -311,10 +310,12 @@ def main():
                     pygame.draw.circle(screen, BLACK, player.transform_pos(), 1)
 
             userPlayer.simulate()
-            print(userPlayer.x, userPlayer.y,  userPlayer.vx, userPlayer.vy, userPlayer.theta)
+            print(userPlayer.x, userPlayer.y,  userPlayer.vx, userPlayer.vy, userPlayer.theta, userPlayer.direction, userPlayer.AoA)
+
             if not HEADLESS:
                 userPlayer.theta = atan2(
-                    *vsub([x * scale for x in vsub(pygame.mouse.get_pos()[::-1], OFFSET)], [userPlayer.y, userPlayer.x])
+                    # *vsub([x * scale for x in vsub(pygame.mouse.get_pos()[::-1], OFFSET)], [userPlayer.y, userPlayer.x])
+                    *[x * scale for x in vsub(pygame.mouse.get_pos()[::-1], OFFSET)]
                 )
             else:
                 userPlayer.theta = PI / 2
@@ -332,6 +333,26 @@ def main():
                     userPlayer.transform_pos(),
                     vadd(
                         [3 * influence * cos(userPlayer.theta) / mass, 3 * influence * sin(userPlayer.theta) / mass],
+                        userPlayer.transform_pos(),
+                    ),
+                    1,
+                )
+                pygame.draw.line(
+                    screen,
+                    GREEN,
+                    userPlayer.transform_pos(),
+                    vadd(
+                        [3 * influence * cos(userPlayer.direction) / mass, -3 * influence * sin(userPlayer.direction) / mass],
+                        userPlayer.transform_pos(),
+                    ),
+                    1,
+                )
+                pygame.draw.line(
+                    screen,
+                    BLACK,
+                    userPlayer.transform_pos(),
+                    vadd(
+                        userPlayer.lift_force,
                         userPlayer.transform_pos(),
                     ),
                     1,
