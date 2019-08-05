@@ -10,14 +10,16 @@ import json
 
 # import tensorflow as tf
 
-HEADLESS = True
+HEADLESS = False
 
 HALF_PI = PI / 2
 TAU = PI * 2
 
-N_PLAYERS = 2 * 160
+N_PLAYERS = 8
 g = 9.80665
-f = 0.1
+g = 4
+drag_flat = 0.1
+drag_narrow = 0.05
 mass = 100
 scale = 15
 influence = 700
@@ -84,6 +86,9 @@ def vadd(l1, l2):
 def vsub(l1, l2):
     return l1[0] - l2[0], l1[1] - l2[1]
 
+def dot(v1, v2):
+    return sum([e1*e2 for e1,e2 in zip(v1,v2)])
+
 
 class Brain:
     def __init__(self, player):
@@ -101,8 +106,8 @@ class Brain:
                     [
                         self.player.x,
                         self.player.y,
-                        mag(self.player.vx, self.player.vy),
-                        atan2(self.player.vy, self.player.vx),
+                        self.player.mag,
+                        self.player.direction,
                         self.player.theta,
                         mag(*vsub(self.player.target, [self.player.x, self.player.y])),
                         atan2(*vsub(self.player.target, [self.player.x, self.player.y])),
@@ -133,17 +138,55 @@ class Player:
         self.fitness = None
         self.time = 0
 
+    @property
+    def direction(self):
+        return atan2(self.vy, self.vx)
+
+    @property
+    def AoA(self):
+        # return atan(self.vx/self.vy)
+        return fmod(self.direction - self.theta, TAU)
+
+    @property
+    def mag(self):
+        return mag(self.vx, self.vy)
+
+    def lift_force(self):
+        # angle = (self.theta - self.direction) % TAU
+
+        y = 2*1.225 * 0.75 * 0.5 / (2*mass)
+        CI = TAU*self.AoA
+        if self.AoA < HALF_PI/2:
+            # normal lift
+            # MAGIC NUMBER = air density (r) * airfoil area (A) = 1.225 * 0.75
+            return y * CI * self.mag**2
+        else:
+            # drag and not much lift
+            return y*CI*self.mag**2
+
     def simulate(self):
         if not self.alive:
             return
         vx, vy = self.vx, self.vy
-        ax, ay = 0, 0
+        # ax, ay = 0, 0
 
-        ax += influence * cos(self.theta)
-        ay += -influence * sin(self.theta) - g * mass
-        _mag = mag(vx, vy)
+        # list of forces acting on player
+        # drag
+        # gravity
+        # lift is related to the difference of movement angle and pointing angle
+        # it points in the perpendicular to the direction of motion, favoring the side that the pointing angle is on.
+        
+        L = self.lift_force()
+        ax = L*sin(HALF_PI + PI + self.AoA)
+        # ax += influence * cos(self.theta)
+        ay = L*cos(HALF_PI + PI + self.AoA) - g * mass
+        # ay += -influence * sin(self.theta) - g * mass
+        _mag = self.mag
+        f = drag_narrow if abs(sin(self.AoA)) < 0.3 else drag_flat
         ax -= f * _mag * vx
         ay -= f * _mag * vy
+        ax *= timedelta
+        ay *= timedelta
         vx += ax / mass
         vy += ay / mass
         self.vx, self.vy = vx, vy
@@ -163,7 +206,7 @@ class Player:
         self.theta = self.brain.evaluate()
 
     def out_of_bounds(self):
-        return self.x < 0 or self.y > self.target[1]
+        return self.x < -100 or self.y > self.target[1]
 
     def copy(self):
         cp = Player(self.target)
@@ -174,6 +217,13 @@ class Player:
         """returns the coordinates to draw self to the screen"""
         return vadd(OFFSET, (int(self.x / scale), int(self.y / scale)))
 
+
+def redraw_screen(screen, DEST, color1, color2, color3, color4):
+    screen.fill(color1)
+
+    pygame.draw.rect(screen, color2, pygame.Rect(vadd(OFFSET, (0, 0)), list(int(e / scale) for e in DEST)))
+    pygame.draw.circle(screen, color3, vadd(OFFSET, (0, 0)), 5)
+    pygame.draw.circle(screen, color4, vadd(OFFSET, list(int(e / scale) for e in DEST)), 5)
 
 def main():
     if not HEADLESS:
@@ -218,11 +268,7 @@ def main():
         halted = False
 
         if not HEADLESS:
-            screen.fill(WHITE)
-
-            pygame.draw.rect(screen, GREY, pygame.Rect(vadd(OFFSET, (0, 0)), list(int(e / scale) for e in DEST)))
-            pygame.draw.circle(screen, GREEN, vadd(OFFSET, (0, 0)), 5)
-            pygame.draw.circle(screen, RED, vadd(OFFSET, list(int(e / scale) for e in DEST)), 5)
+            redraw_screen(screen, DEST, WHITE, GREY, GREEN, RED)
 
         alive_players_count = len(players)
         while not halted:
@@ -235,7 +281,8 @@ def main():
                         if e.key == K_r:
                             # reset canvas
                             if not HEADLESS:
-                                canvas.fill(WHITE)
+                                redraw_screen(screen, DEST, WHITE, GREY, GREEN, RED)
+                            userPlayer.reset()
                             for player in players:
                                 player.reset()
 
@@ -264,6 +311,7 @@ def main():
                     pygame.draw.circle(screen, BLACK, player.transform_pos(), 1)
 
             userPlayer.simulate()
+            print(userPlayer.x, userPlayer.y,  userPlayer.vx, userPlayer.vy, userPlayer.theta)
             if not HEADLESS:
                 userPlayer.theta = atan2(
                     *vsub([x * scale for x in vsub(pygame.mouse.get_pos()[::-1], OFFSET)], [userPlayer.y, userPlayer.x])
@@ -306,6 +354,7 @@ def main():
             player.target = new_target
         DEST = new_target
         userPlayer.reset()
+        userPlayer.x, userPlayer.y = 1000,1000
     if should_write_training_data:
         with open("save_data.json", "w") as fd:
             training_data = {"training_data": [player.brain.params for player in players]}
