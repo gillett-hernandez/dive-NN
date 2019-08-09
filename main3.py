@@ -14,9 +14,13 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--headless", action="store_true")
 parser.add_argument("--read-data", action="store_true")
 parser.add_argument("--write-data", action="store_true")
+parser.add_argument("--show-trails", action="store_true")
 parser.add_argument("--frameskip", type=int, default=1)
 parser.add_argument("--batches", type=int, default=100)
-parser.add_argument("--n-players", type=int, default=1024)
+parser.add_argument("--scale", type=int, default=15)
+parser.add_argument("--n-players", type=int, default=128)
+parser.add_argument("--draw-vectors", action="store_true")
+parser.add_argument("--debug", action="store_true")
 
 
 args = parser.parse_args()
@@ -27,6 +31,9 @@ should_write_training_data = args.write_data
 should_read_training_data = args.read_data
 BATCHES = args.batches
 N_PLAYERS = args.n_players
+scale = args.scale
+should_draw_vectors = args.draw_vectors
+debug = args.debug
 
 if not HEADLESS:
     import pygame
@@ -40,11 +47,9 @@ HALF_PI = PI / 2
 TAU = PI * 2
 
 g = 9.80665
-g = 2
-drag_flat = 0.10
-drag_narrow = 0.05
+drag_flat = 0.07
+drag_narrow = 0.038
 mass = 100
-scale = 20
 influence = 900
 
 MUTATION_EFFECT = 0.20
@@ -54,11 +59,11 @@ timedelta = 0.1
 N_PARAMS = 11
 TTL = 1000
 OFFSET = (100, 100)
-RANDOM_LOWER_BOUND = 16000
-RANDOM_UPPER_BOUND = 16000
+RANDOM_LOWER_BOUND = 9000
+RANDOM_UPPER_BOUND = 9000
 PARAM_LOWER_BOUND = -3
 PARAM_UPPER_BOUND = 3
-RANDOM_INITIAL = 16000
+RANDOM_INITIAL = 9000
 FITNESS_HYPERPARAMETER_WIDTH=10000
 FITNESS_HYPERPARAMETER_HEIGHT=30000
 resources = Namespace()
@@ -72,6 +77,8 @@ def render_text(text, color=(0, 0, 0)):
     global offset
     global text_to_render
     global longest_width
+    if HEADLESS:
+        return
     if not isinstance(text, str):
         text = str(text)
     font = resources.font
@@ -214,16 +221,16 @@ class Player:
 
     @property
     def direction(self):
-        return atan2(self.vy, self.vx)
+        return atan2(self.vy,self.vx) if self.vx != 0 else (PI+HALF_PI)
 
     @property
     def AoA(self):
         # return atan2(self.vy, self.vx)
-        return self.theta - self.direction
+        return fmod(self.direction- self.theta, TAU)
 
     @property
     def tangent(self):
-        return (atan(-self.vx/self.vy) + (PI if self.vy > 0 else 0)) if self.vy != 0 else HALF_PI
+        return ((atan2(-self.vx,self.vy) + (PI if self.vy > 0 else 0)) if self.vy != 0 else HALF_PI) % TAU
     
 
     @property
@@ -236,7 +243,7 @@ class Player:
 
         y = 0.7 * 1.225 * 0.75 / (2*mass)
         # normal lift
-        mul = 30*y * self.mag**2 * cos(self.AoA) * sin(self.AoA)
+        mul = 50*y * self.mag**2 * cos(self.AoA) * sin(self.AoA)
         return [mul*cos(self.tangent), mul*sin(self.tangent)]
 
 
@@ -256,8 +263,8 @@ class Player:
         ay = L[1] - g * mass
         # ay += -influence * sin(self.theta) -0 g * mass
         _mag = self.mag
-        # f = drag_narrow if abs(sin(self.AoA)) < 0.3 else drag_flat
-        f = drag_flat
+        # f = drag_narrow + (drag_flat-drag_narrow) * abs(sin(self.AoA))
+        f = drag_narrow #+ (drag_flat-drag_narrow) * abs(sin(self.AoA))
         ax -= f * _mag * vx
         ay -= f * _mag * vy
         vx += ax / mass
@@ -326,6 +333,8 @@ def main():
         font = pygame.font.SysFont(pygame.font.get_default_font(), 22)
         resources.font = font
 
+        redraw_screen(screen, DEST, WHITE, GREY, GREEN, RED)
+
     if should_read_training_data:
         with open("save_data.json", "r") as fd:
             data = json.load(fd)
@@ -379,10 +388,17 @@ def main():
                             pygame.quit()
                             return
 
-            # screen.fill(WHITE)
+            if not headless_flag and not args.show_trails:
+                screen.fill(WHITE)
+                redraw_screen(screen, DEST, WHITE, GREY, GREEN, RED)
 
             render_text(f"fittest flyers momentum = {mass * mag(flyers[0].vx, flyers[0].vy)}")
-            render_text(f"user flyers momentum = {mass * mag(userPlayer.vx, userPlayer.vy)}")
+            # render_text(f"user flyers momentum = {mass * mag(userPlayer.vx, userPlayer.vy)}")
+            # render_text(f"user flyers speed = {1 * mag(userPlayer.vx, userPlayer.vy)}")
+            # render_text(f"user flyers direction = {userPlayer.direction}")
+            # render_text(f"user flyers theta = {userPlayer.theta}")
+            # render_text(f"user flyers AoA = {userPlayer.AoA}")
+            # render_text(f"user flyers velocity = {[userPlayer.vx, userPlayer.vy]}")
 
             for flyer in reversed(flyers):
                 flyer.simulate()
@@ -408,11 +424,12 @@ def main():
 
             userPlayer.simulate()
             if not headless_flag:
-                userPlayer.theta = atan2(
+                userPlayer.theta = -atan2(
                     *vsub([x * scale for x in vsub(pygame.mouse.get_pos()[::-1], OFFSET)], [userPlayer.y, userPlayer.x])
                 )
             else:
-                userPlayer.theta = PI / 2
+                # userqPlayer.theta = PI / 2
+                pass
             # print(userPlayer.theta)
             if userPlayer.alive and userPlayer.out_of_bounds():
                 userPlayer.alive = False
@@ -420,13 +437,33 @@ def main():
                 userPlayer.alive = False
             if not headless_flag:
                 pygame.draw.circle(screen, GREEN, userPlayer.transform_pos(), 1)
-            if not headless_flag:
+            if not headless_flag and should_draw_vectors:
                 pygame.draw.line(
                     screen,
                     RED,
                     userPlayer.transform_pos(),
                     vadd(
-                        [3 * influence * cos(userPlayer.theta) / mass, 3 * influence * sin(userPlayer.theta) / mass],
+                        [3 * influence * cos(userPlayer.theta) / mass, -3 * influence * sin(userPlayer.theta) / mass],
+                        userPlayer.transform_pos(),
+                    ),
+                    1,
+                )
+                pygame.draw.line(
+                    screen,
+                    BLACK,
+                    userPlayer.transform_pos(),
+                    vadd(
+                        [userPlayer.lift_force[0], -userPlayer.lift_force[1]],
+                        userPlayer.transform_pos(),
+                    ),
+                    1,
+                )
+                pygame.draw.line(
+                    screen,
+                    BLACK,
+                    userPlayer.transform_pos(),
+                    vadd(
+                        [userPlayer.vx, -userPlayer.vy],
                         userPlayer.transform_pos(),
                     ),
                     1,
@@ -434,10 +471,10 @@ def main():
 
             render_text(f"alive flyers = {alive_flyers_count}")
 
-
-            screen.blit(WHITE_SURFACE, (0,0), (0,0, longest_width+500, offset))
-            for text_surface, pos in text_to_render:
-                screen.blit(text_surface, pos)
+            if not headless_flag:
+                screen.blit(WHITE_SURFACE, (0,0), (0,0, longest_width+500, offset))
+                for text_surface, pos in text_to_render:
+                    screen.blit(text_surface, pos)
             if alive_flyers_count == 0:
                 halted = True
 
