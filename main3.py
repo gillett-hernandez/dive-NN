@@ -11,7 +11,7 @@ from itertools import takewhile
 from namespace import Namespace
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--headless", action="store_true")
+parser.add_argument("--headless", action="store_false")
 parser.add_argument("--read-data", action="store_true")
 parser.add_argument("--write-data", action="store_true")
 parser.add_argument("--show-trails", action="store_true")
@@ -38,6 +38,7 @@ debug = args.debug
 if not HEADLESS:
     import pygame
     from pygame.locals import *
+    import colorsys
 
 
 # import tensorflow as tf
@@ -61,8 +62,8 @@ TTL = 1000
 OFFSET = (100, 100)
 RANDOM_LOWER_BOUND = 9000
 RANDOM_UPPER_BOUND = 9000
-PARAM_LOWER_BOUND = -3
-PARAM_UPPER_BOUND = 3
+PARAM_LOWER_BOUND = -1
+PARAM_UPPER_BOUND = 1
 RANDOM_INITIAL = 9000
 FITNESS_HYPERPARAMETER_WIDTH=10000
 FITNESS_HYPERPARAMETER_HEIGHT=30000
@@ -162,6 +163,22 @@ def vadd(l1, l2):
 
 def vsub(l1, l2):
     return l1[0] - l2[0], l1[1] - l2[1]
+
+
+def construct_players(DEST, filename):
+    if should_read_training_data:
+        with open(filename, "r") as fd:
+            data = json.load(fd)
+
+    flyers = []
+    if should_read_training_data:
+        for i in range(len(data["training_data"])):
+            flyers.append(Player(DEST))
+            flyers[-1].brain.params = data["training_data"][i]
+    else:
+        for i in range(N_PLAYERS):
+            flyers.append(Player(DEST))
+    return flyers
 
 
 class Brain:
@@ -291,21 +308,44 @@ class Player:
 
     def transform_pos(self):
         """returns the coordinates to draw self to the screen"""
-        return vadd(OFFSET, (int(self.x / scale), int(self.y / scale)))
+        return transform_pos((self.x, self.y))
+
+
+def transform_pos(pos=(0,0)):
+    """returns the screen coordinates to draw pos"""
+    return vadd(OFFSET, (int(pos[0] / scale), int(pos[1] / scale)))
+
+
+def reverse_transform_position(pos):
+    """returns the approximate real coordinates that correspond to screen coordinates"""
+    return vsub([e*scale for e in pos], OFFSET)
 
 
 def redraw_screen(screen, DEST, color1, color2, color3, color4):
     screen.fill(color1)
 
-    pygame.draw.rect(screen, color2, pygame.Rect(vadd(OFFSET, (0, 0)), list(int(e / scale) for e in DEST)))
+    # pygame.draw.rect(screen, color2, pygame.Rect(vadd(OFFSET, (0, 0)), list(int(e / scale) for e in DEST)))
+    screen.blit(color2, vadd(OFFSET, (0,0)))
     pygame.draw.circle(screen, color3, vadd(OFFSET, (0, 0)), 5)
     pygame.draw.circle(screen, color4, vadd(OFFSET, list(int(e / scale) for e in DEST)), 5)
 
-def fitness_formula(flyer):
-    return FITNESS_HYPERPARAMETER_HEIGHT * exp(-(mag(*vsub(flyer.target, [flyer.x, flyer.y])) / FITNESS_HYPERPARAMETER_WIDTH) ** 2) - 2*flyer.time
+def fitness_formula(pos, target, time):
+    return FITNESS_HYPERPARAMETER_HEIGHT * exp(-(mag(*vsub(target, pos)) / FITNESS_HYPERPARAMETER_WIDTH) ** 2) - 2*time
 
 
-def main():
+def prepare_bg(target, SIZE, fitness_formula):
+    surface = pygame.Surface((SIZE)).convert_alpha()
+    for y in range(0, SIZE[1], 10):
+        for x in range(0, SIZE[0], 10):
+            pos = reverse_transform_position((x, y))
+            v = fitness_formula(pos, target, 0)
+            v = 1+exp(-1) - exp(-v/30000)
+            # print(pos, v)
+            surface.fill(pygame.Color(*[int(e*255) for e in colorsys.hls_to_rgb(v, 0.5, 0.5)]), (x,y, 10,10))
+    return surface
+
+
+def main(read_file="savedata.json", write_file = "savedata.json"):
     global HEADLESS
     if not HEADLESS:
 
@@ -328,22 +368,16 @@ def main():
     if not HEADLESS:
         WHITE_SURFACE = pygame.Surface((SIZE))
         WHITE_SURFACE.fill(WHITE)
+        bg = prepare_bg(DEST, vsub(transform_pos(DEST), OFFSET), fitness_formula)
 
     if not HEADLESS:
         font = pygame.font.SysFont(pygame.font.get_default_font(), 22)
         resources.font = font
 
-        redraw_screen(screen, DEST, WHITE, GREY, GREEN, RED)
+        redraw_screen(screen, DEST, WHITE, bg, GREEN, RED)
 
-    if should_read_training_data:
-        with open("save_data.json", "r") as fd:
-            data = json.load(fd)
+    flyers = construct_players(DEST, read_file)
 
-    flyers = []
-    for i in range(N_PLAYERS):
-        flyers.append(Player(DEST))
-        if should_read_training_data:
-            flyers[-1].brain.params = data["training_data"][i]
     userPlayer = Player(DEST)
     best_fitness = float("inf")
 
@@ -358,7 +392,7 @@ def main():
         halted = False
 
         if not headless_flag:
-            redraw_screen(screen, DEST, WHITE, GREY, GREEN, RED)
+            redraw_screen(screen, DEST, WHITE, bg, GREEN, RED)
 
         alive_flyers_count = len(flyers)
         while not halted:
@@ -375,7 +409,7 @@ def main():
                         if e.key == K_r:
                             # reset canvas
                             if not headless_flag:
-                                redraw_screen(screen, DEST, WHITE, GREY, GREEN, RED)
+                                redraw_screen(screen, DEST, WHITE, bg, GREEN, RED)
                             for flyer in flyers:
                                 flyer.reset()
                             userPlayer.reset()
@@ -390,7 +424,7 @@ def main():
 
             if not headless_flag and not args.show_trails:
                 screen.fill(WHITE)
-                redraw_screen(screen, DEST, WHITE, GREY, GREEN, RED)
+                redraw_screen(screen, DEST, WHITE, bg, GREEN, RED)
 
             render_text(f"fittest flyers momentum = {mass * mag(flyers[0].vx, flyers[0].vy)}")
             # render_text(f"user flyers momentum = {mass * mag(userPlayer.vx, userPlayer.vy)}")
@@ -405,18 +439,20 @@ def main():
                 flyer.update()
                 if flyer.alive and flyer.out_of_bounds():
                     flyer.alive = False
-                    flyer.fitness = fitness_formula(flyer)
+                    flyer.fitness = fitness_formula((flyer.x, flyer.y), flyer.target, flyer.time)
                     # print(flyer.fitness)
                     if not headless_flag:
                         pygame.draw.circle(screen, RED, flyer.transform_pos(), 3)
+                        render_text(flyer.fitness)
                     alive_flyers_count -= 1
                     continue
                 if flyer.alive and flyer.time > TTL:
                     flyer.alive = False
-                    flyer.fitness = fitness_formula(flyer)
+                    flyer.fitness = fitness_formula((flyer.x, flyer.y), flyer.target, flyer.time)
                     # print(flyer.fitness)
                     if not headless_flag:
                         pygame.draw.circle(screen, RED, flyer.transform_pos(), 3)
+                        render_text(flyer.fitness)
                     alive_flyers_count -= 1
                     continue
                 if not headless_flag:
@@ -494,7 +530,7 @@ def main():
         userPlayer.reset()
         print(id(flyers[0]))
     if should_write_training_data:
-        with open("save_data.json", "w") as fd:
+        with open(write_file, "w") as fd:
             training_data = {"training_data": [flyer.brain.params for flyer in flyers]}
             json.dump(training_data, fd, indent=4)
             # fd.write("{\n")
