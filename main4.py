@@ -102,57 +102,53 @@ def clear_text_buffer():
     text_to_render = []
 
 
-def crossover(player1, player2):
+def crossover(brain1, brain2):
     # bits are basically the binary choices for which parameter to take from which parent
     if hasattr(rand, "choices"):
         bits = rand.choices([0, 1], k=N_PARAMS)
     else:
         bits = [rand.choice([0, 1]) for _ in range(N_PARAMS)]
-    params1 = player1.brain.params
-    params2 = player2.brain.params
-    new_player = Player(player1.target)
-    new_player.brain.params = [[params1[i], params2[i]][bit] for i, bit in enumerate(bits)]
-    return new_player
+    new_brain = [[brain1[i], brain2[i]][bit] for i, bit in enumerate(bits)]
+    return new_brain
 
 
-def mutation(player):
-    for i, param in enumerate(player.brain.params):
+def mutation(brain):
+    for i, param in enumerate(brain):
         if random(0, 1) < MUTATION_CHANCE:
             # print("mutation occurred!")
-            # player.brain.params[i] = random(-MUTATION_EFFECT, MUTATION_EFFECT) + param
-            player.brain.params[i] = rand.gauss(0, 2 * MUTATION_EFFECT) + param
+            # brain.brain.params[i] = random(-MUTATION_EFFECT, MUTATION_EFFECT) + param
+            brain[i] = rand.gauss(0, 2 * MUTATION_EFFECT) + param
 
 
-def generate_children(players, n=float("inf")):
+def generate_children(brains, n=float("inf")):
     i = 0
     while i < n:
-        player1, player2 = rand.sample(players, 2)
-        new_player = crossover(player1, player2)
-        mutation(new_player)
-        yield new_player
+        brain1, brain2 = rand.sample(brains, 2)
+        new_brain = crossover(brain1, brain2)
+        mutation(new_brain)
+        yield new_brain
         i += 1
 
 PROPORTIONS = [0.25, 0.25, 0.6, 0.15]
-def selection_crossover_and_breeding(players, brains):
+def selection_crossover_and_breeding(fitnesses, brains):
     new_brains = []
     # sort by fitness, lower is better
-    zipped = list(zip(players, brains))
-    zipped.sort(key=lambda e: e[0][-1], reverse=True)
-    brains = list(zip(*zipped))
+    zipped = list(zip(fitnesses, brains))
+    zipped.sort(key=lambda e: e[0], reverse=True)
+    brains = list(zip(*zipped))[1]
     # truncate X% worst players
-    players = players[: int(PROPORTIONS[0]*N_PLAYERS)]
-    # keep the Y% greatest players
-    new_players.extend(players[: int(PROPORTIONS[1]*N_PLAYERS)])
-    # shuffle players so we can split them into random batches
-    rand.shuffle(players)
-    # breed players to fill Z% of the new population
-    for new_player in generate_children(players, n=int(PROPORTIONS[2]*N_PLAYERS)):
-        new_players.append(new_player)
+    brains = brains[: int(PROPORTIONS[0]*N_PLAYERS)]
+    # keep the Y% greatest brains
+    new_brains.extend(brains[: int(PROPORTIONS[1]*N_PLAYERS)])
+
+    # breed brains to fill Z% of the new population
+    for new_brain in generate_children(brains, n=int(PROPORTIONS[2]*N_PLAYERS)):
+        new_brains.append(new_brain)
     # fill the rest with new randoms
-    while len(new_players) < N_PLAYERS:
-        new_players.append(construct_player(new_players[-1].target))
-    assert len(new_players) == N_PLAYERS, (len(new_players), N_PLAYERS)
-    return new_players
+    while len(new_brains) < N_PLAYERS:
+        new_brains.append(construct_brain())
+    assert len(new_brains) == N_PLAYERS, (len(new_brains), N_PLAYERS)
+    return new_brains
 
 
 def sign(x):
@@ -171,7 +167,7 @@ def construct_brain():
     return [random(PARAM_LOWER_BOUND, PARAM_UPPER_BOUND) for _ in range(N_PARAMS)]
 
 def reset(player):
-    player[0:5] = 0
+    player[0:5] = [0,0,0,0,0]
     player[7] = 0
     player[-1] = 0
     player[-2] = True
@@ -229,15 +225,11 @@ def lift_force(player):
 
 def simulate(player):
     L = lift_force(player)
-    # ax = L[0]
-    # ay = L[1] - g * mass
     _mag = mag(player[2], player[3])
     # f = drag_narrow + (drag_flat-drag_narrow) * abs(sin(self.AoA))
-    f = drag_narrow #+ (drag_flat-drag_narrow) * abs(sin(self.AoA))
-    # ax -= f * _mag * player[2]
-    # ay -= f * _mag * player[3]
-    player[2] += (L[0] - f * _mag * player[2]) / mass
-    player[3] += (L[1] - g*mass - f * _mag * player[2]) / mass
+    f = drag_narrow
+    player[2] += (L[0] - f * _mag * player[2])/mass
+    player[3] += (L[1] - g * mass - f * _mag * player[3])/mass
     player[0] += player[2] * timedelta
     player[1] -= player[3] * timedelta
     player[7] += timedelta
@@ -515,7 +507,7 @@ def main(read_file="savedata.json", write_file = "savedata.json"):
         print("new target = " + str(new_target))
         for player in players:
             player[5:7] = new_target
-        players = selection_crossover_and_breeding(players)
+        players = selection_crossover_and_breeding([p[-1] for p in players], brains)
         for player in players:
             reset(player)
         DEST = new_target
