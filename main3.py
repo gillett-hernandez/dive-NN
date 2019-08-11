@@ -203,7 +203,7 @@ class Brain:
                         self.flyer.direction,
                         self.flyer.theta,
                         mag(*vsub(self.flyer.target, [self.flyer.x, self.flyer.y])),
-                        atan2(*vsub(self.flyer.target, [self.flyer.x, self.flyer.y])),
+                        atan2(*reversed(vsub(self.flyer.target, [self.flyer.x, self.flyer.y]))),
                         (self.flyer.target[0] - self.flyer.x),
                         (self.flyer.target[1] - self.flyer.y),
                         self.flyer.time,
@@ -232,7 +232,7 @@ class Player:
         if params is not None:
             self.brain.params = params
         self.target = target
-        self.theta = self.brain.evaluate()
+        self.update()
         self.alive = True
         self.fitness = None
 
@@ -293,6 +293,7 @@ class Player:
 
     def reset(self):
         self.x, self.y, self.vx, self.vy = 0, 0, 0, 0
+        self.theta = 0
         self.alive = True
         self.time = 0
         self.fitness = None
@@ -377,6 +378,8 @@ def main(read_file="savedata.json", write_file = "savedata.json"):
         redraw_screen(screen, DEST, WHITE, bg, GREEN, RED)
 
     flyers = construct_players(DEST, read_file)
+    print(flyers[0].theta)
+    print(flyers[0].brain.params)
 
     userPlayer = Player(DEST)
     best_fitness = float("inf")
