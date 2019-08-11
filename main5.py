@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 import argparse
-# import numpy as np
+import numpy as np
 from random import uniform as random
 import random as rand
 from math import pi as PI
@@ -166,6 +166,12 @@ def vsub(l1, l2):
 def construct_brain():
     return [random(PARAM_LOWER_BOUND, PARAM_UPPER_BOUND) for _ in range(N_PARAMS)]
 
+def reset(player):
+    player[0:5] = [0,0,0,0,0]
+    player[7] = 0
+    player[-1] = 0
+    player[-2] = True
+
 
 def remap(variables):
     return [
@@ -217,7 +223,7 @@ def lift_force(player):
     mul = 50*y * pmag(player)**2 * cos(_AoA) * sin(_AoA)
     return [mul*cos(_tan), mul*sin(_tan)]
 
-def simulate(player):
+def simulate(players):
     L = lift_force(player)
     _mag = mag(player[2], player[3])
     # f = drag_narrow + (drag_flat-drag_narrow) * abs(sin(self.AoA))
@@ -228,8 +234,31 @@ def simulate(player):
     player[1] -= player[3] * timedelta
     player[7] += timedelta
 
-def update(player, brain):
-    player[4] = evaluate(player, brain)
+def update(players, brains):
+    players[:][4] = evaluate(player, brain)
+
+def check_alive(players):
+    if player[-2] and out_of_bounds(player):
+        player[-2] = False # assign alive status
+        player[-1] = player_fitness_formula(player) # assign fitness
+        # print(player[-1])
+        if not headless_flag:
+            pygame.draw.circle(screen, RED, transform_pos(player[0], player[1]), 3)
+            render_text(player[-1])
+        alive_players_count -= 1
+        continue
+    if player[-2] and player[7] > TTL:
+        player[-2] = False # assign alive status
+        player[-1] = player_fitness_formula(player) # assign fitness
+        # print(player[-1])
+        if not headless_flag:
+            pygame.draw.circle(screen, RED, transform_pos(player[0], player[1]), 3)
+            render_text(player[-1])
+        alive_players_count -= 1
+        continue
+
+def draw(screen, players):
+    pass
 
 def construct_player(target):
     return [
@@ -244,14 +273,6 @@ def construct_player(target):
         True, # alive
         0 # fitness
     ]
-
-
-def reset(player):
-    player[0:5] = [0,0,0,0,0]
-    player[7] = 0
-    player[-2] = True
-    player[-1] = 0
-
 
 def construct_player_and_brain(target, params=None):
     player = construct_player(target)
@@ -312,7 +333,6 @@ def player_fitness_formula(player):
 def fitness_formula(x, y, tx, ty, time):
     return FITNESS_HYPERPARAMETER_HEIGHT * exp(-(mag(tx-x, ty-y) / FITNESS_HYPERPARAMETER_WIDTH) ** 2) - 2*time
 
-assert fitness_formula(0,0,0,0,0) == 30000
 
 def prepare_bg(tx, ty, SIZE, fitness_formula):
     surface = pygame.Surface((SIZE)).convert_alpha()
@@ -359,6 +379,7 @@ def main(read_file="savedata.json", write_file = "savedata.json"):
 
     players, brains = construct_players_and_brains(DEST, read_file)
     assert len(players) == len(brains)
+    fplayers, fbrains = players[:], brains[:]
 
     userPlayer = construct_player(DEST)
     userBrain = construct_brain()
@@ -366,12 +387,13 @@ def main(read_file="savedata.json", write_file = "savedata.json"):
     best_fitness = float("inf")
 
     for i in range(BATCHES):
-        print(f"starting batch {i} of {BATCHES}")
         frame = 0
         if frame % FRAMESKIP == 0 and not HEADLESS:
             headless_flag = False
         else:
             headless_flag = True
+        print(f"batch {i} of {BATCHES} = {round(100*i/BATCHES,2)}% done")
+        print(f"best fitness was {best_fitness}")
         halted = False
 
         if not headless_flag:
@@ -416,32 +438,44 @@ def main(read_file="savedata.json", write_file = "savedata.json"):
             # render_text(f"user players theta = {userPlayer.theta}")
             # render_text(f"user players AoA = {userPlayer.AoA}")
             # render_text(f"user players velocity = {[userPlayer.vx, userPlayer.vy]}")
-            # print(f"percentage of players dead = {len([p for p in players if not p[-2]])/len(players)}")
-            # print(f"alive players count {alive_players_count}")
+
+            # for player, brain in zip(reversed(players), reversed(brains)):
+            #     if not player[-2]:
+            #         continue
+            #     simulate(player)
+            #     update(player, brain)
+            #     if player[-2] and out_of_bounds(player):
+            #         player[-2] = False # assign alive status
+            #         player[-1] = player_fitness_formula(player) # assign fitness
+            #         # print(player[-1])
+            #         if not headless_flag:
+            #             pygame.draw.circle(screen, RED, transform_pos(player[0], player[1]), 3)
+            #             render_text(player[-1])
+            #         alive_players_count -= 1
+            #         continue
+            #     if player[-2] and player[7] > TTL:
+            #         player[-2] = False # assign alive status
+            #         player[-1] = player_fitness_formula(player) # assign fitness
+            #         # print(player[-1])
+            #         if not headless_flag:
+            #             pygame.draw.circle(screen, RED, transform_pos(player[0], player[1]), 3)
+            #             render_text(player[-1])
+            #         alive_players_count -= 1
+            #         continue
+            #     if not headless_flag:
+            #         pygame.draw.circle(screen, BLACK, transform_pos(player[0], player[1]), 1)
+
+            simulate(fplayers)
+            check_alive(fplayers)
+            fplayers, fbrains = [player, brain for player, brain in zip(players, brains) if player[-2]]
+            alive_players_count = len(fplayers)
+            update(fplayers, fbrains)
+            draw(fplayers)
 
             for player, brain in zip(reversed(players), reversed(brains)):
-                if not player[-2]:
-                    continue
                 simulate(player)
                 update(player, brain)
-                if player[-2] and out_of_bounds(player):
-                    player[-2] = False # assign alive status
-                    player[-1] = player_fitness_formula(player) # assign fitness
-                    # print(player[-1])
-                    if not headless_flag:
-                        pygame.draw.circle(screen, RED, transform_pos(player[0], player[1]), 3)
-                        render_text(player[-1])
-                    alive_players_count -= 1
-                    continue
-                if player[-2] and player[7] > TTL:
-                    player[-2] = False # assign alive status
-                    player[-1] = player_fitness_formula(player) # assign fitness
-                    # print(player[-1])
-                    if not headless_flag:
-                        pygame.draw.circle(screen, RED, transform_pos(player[0], player[1]), 3)
-                        render_text(player[-1])
-                    alive_players_count -= 1
-                    continue
+                
                 if not headless_flag:
                     pygame.draw.circle(screen, BLACK, transform_pos(player[0], player[1]), 1)
 
@@ -509,25 +543,16 @@ def main(read_file="savedata.json", write_file = "savedata.json"):
         best_fitness = max(*[e[-1] for e in players])
         new_target = random(RANDOM_LOWER_BOUND, RANDOM_UPPER_BOUND), FLOOR
         print("new target = " + str(new_target))
-        print(f"batch {i} of {BATCHES} = {round(100*i/BATCHES,2)}% done")
-        print(f"best fitness was {best_fitness}")
         for player in players:
             player[5:7] = new_target
-        print("performing genetic algorithm")
-        brains = selection_crossover_and_breeding([p[-1] for p in players], brains)
-        # assert len(set(id(e) for e in brains)) == len(brains)
-        players = players[:len(brains)]
-        print("resetting players")
-        print("player 0 before reset", players[0])
+        players = selection_crossover_and_breeding([p[-1] for p in players], brains)
         for player in players:
             reset(player)
-        print("player 0 after reset", players[0])
-        print("done resetting players")
         DEST = new_target
         reset(userPlayer)
     if should_write_training_data:
         with open(write_file, "w") as fd:
-            training_data = {"training_data": brains}
+            training_data = {"training_data": [player.brain.params for player in players]}
             json.dump(training_data, fd, indent=4)
             # fd.write("{\n")
             # for player in players:
