@@ -3,6 +3,7 @@ import argparse
 # import numpy as np
 from random import uniform as random
 import random as rand
+import time
 from math import pi as PI
 from math import cos, sin, atan2, atan, tanh, fmod, exp, isclose
 from math import hypot as mag
@@ -367,6 +368,7 @@ def main(read_file="savedata.json", write_file = "savedata.json"):
 
     for i in range(BATCHES):
         print(f"starting batch {i} of {BATCHES}")
+        t1 = time.perf_counter()
         frame = 0
         if frame % FRAMESKIP == 0 and not HEADLESS:
             headless_flag = False
@@ -418,7 +420,6 @@ def main(read_file="savedata.json", write_file = "savedata.json"):
             # render_text(f"user players velocity = {[userPlayer.vx, userPlayer.vy]}")
             # print(f"percentage of players dead = {len([p for p in players if not p[-2]])/len(players)}")
             # print(f"alive players count {alive_players_count}")
-
             for player, brain in zip(reversed(players), reversed(brains)):
                 if not player[-2]:
                     continue
@@ -506,6 +507,8 @@ def main(read_file="savedata.json", write_file = "savedata.json"):
                 pygame.display.flip()
             clear_text_buffer()
             frame += 1
+        t2 = time.perf_counter()
+        print(t2-t1)
         best_fitness = max(*[e[-1] for e in players])
         new_target = random(RANDOM_LOWER_BOUND, RANDOM_UPPER_BOUND), FLOOR
         print("new target = " + str(new_target))
@@ -525,6 +528,8 @@ def main(read_file="savedata.json", write_file = "savedata.json"):
         print("done resetting players")
         DEST = new_target
         reset(userPlayer)
+        t3 = time.perf_counter()
+        print(t3-t2)
     if should_write_training_data:
         with open(write_file, "w") as fd:
             training_data = {"training_data": brains}
