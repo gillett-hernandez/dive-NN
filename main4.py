@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+
 # import numpy as np
 from random import uniform as random
 import random as rand
@@ -66,8 +67,8 @@ RANDOM_UPPER_BOUND = 15000
 PARAM_LOWER_BOUND = -1
 PARAM_UPPER_BOUND = 1
 RANDOM_INITIAL = 15000
-FITNESS_HYPERPARAMETER_WIDTH=10000
-FITNESS_HYPERPARAMETER_HEIGHT=30000
+FITNESS_HYPERPARAMETER_WIDTH = 10000
+FITNESS_HYPERPARAMETER_HEIGHT = 30000
 resources = Namespace()
 
 offset = 0
@@ -130,7 +131,10 @@ def generate_children(brains, n=float("inf")):
         yield new_brain
         i += 1
 
+
 PROPORTIONS = [0.25, 0.25, 0.6, 0.15]
+
+
 def selection_crossover_and_breeding(fitnesses, brains):
     new_brains = []
     # sort by fitness, lower is better
@@ -138,12 +142,12 @@ def selection_crossover_and_breeding(fitnesses, brains):
     zipped.sort(key=lambda e: e[0], reverse=True)
     brains = list(zip(*zipped))[1]
     # truncate X% worst players
-    brains = brains[: int(PROPORTIONS[0]*N_PLAYERS)]
+    brains = brains[: int(PROPORTIONS[0] * N_PLAYERS)]
     # keep the Y% greatest brains
-    new_brains.extend(brains[: int(PROPORTIONS[1]*N_PLAYERS)])
+    new_brains.extend(brains[: int(PROPORTIONS[1] * N_PLAYERS)])
 
     # breed brains to fill Z% of the new population
-    for new_brain in generate_children(brains, n=int(PROPORTIONS[2]*N_PLAYERS)):
+    for new_brain in generate_children(brains, n=int(PROPORTIONS[2] * N_PLAYERS)):
         new_brains.append(new_brain)
     # fill the rest with new randoms
     while len(new_brains) < N_PLAYERS:
@@ -170,38 +174,41 @@ def construct_brain():
 
 def remap(variables):
     return [
-        variables[0], # x
-        variables[1], # y
-        pmag(variables), # mag
-        direction(variables), # dir
-        variables[4], # theta
-        mag(variables[5]-variables[0], variables[6]-variables[1]), # distance to target
-        atan2(variables[6]-variables[1], variables[5]-variables[0]), # angle to target
-        variables[5]-variables[0], # horizontal distance to target
-        variables[6]-variables[1], # vertical distance to target
-        variables[7] # time
+        variables[0],  # x
+        variables[1],  # y
+        pmag(variables),  # mag
+        direction(variables),  # dir
+        variables[4],  # theta
+        mag(variables[5] - variables[0], variables[6] - variables[1]),  # distance to target
+        atan2(variables[6] - variables[1], variables[5] - variables[0]),  # angle to target
+        variables[5] - variables[0],  # horizontal distance to target
+        variables[6] - variables[1],  # vertical distance to target
+        variables[7],  # time
     ]
+
 
 def evaluate(variables, params):
     rm = remap(variables)
-    return fmod(
-        params[-1] + sum(p * s for p, s in zip(params, remap(variables))),
-        TAU
-    )
+    return fmod(params[-1] + sum(p * s for p, s in zip(params, remap(variables))), TAU)
 
 
 def out_of_bounds(player):
     return player[0] < -100 or player[1] > player[6]
 
+
 def direction(player):
-    return atan2(player[3], player[2]) if player[2] != 0 else (PI+HALF_PI)
+    return atan2(player[3], player[2]) if player[2] != 0 else (PI + HALF_PI)
+
 
 def AoA(player):
     # return atan2(player[3], player[2])
     return fmod(direction(player) - player[4], TAU)
 
+
 def tangent(player):
-    return ((atan2(-player[2],player[3]) + (PI if player[3] > 0 else 0)) if player[3] != 0 else HALF_PI) % TAU
+    return (
+        (atan2(-player[2], player[3]) + (PI if player[3] > 0 else 0)) if player[3] != 0 else HALF_PI
+    ) % TAU
 
 
 def pmag(player):
@@ -211,44 +218,47 @@ def pmag(player):
 def lift_force(player):
     # angle = (self.theta - self.direction) % TAU
 
-    y = 0.7 * 1.225 * 0.75 / (2*mass)
+    y = 0.7 * 1.225 * 0.75 / (2 * mass)
     # normal lift
     _AoA = AoA(player)
     _tan = tangent(player)
-    mul = 50*y * pmag(player)**2 * cos(_AoA) * sin(_AoA)
-    return [mul*cos(_tan), mul*sin(_tan)]
+    mul = 50 * y * pmag(player) ** 2 * cos(_AoA) * sin(_AoA)
+    return [mul * cos(_tan), mul * sin(_tan)]
+
 
 def simulate(player):
     L = lift_force(player)
     _mag = mag(player[2], player[3])
     # f = drag_narrow + (drag_flat-drag_narrow) * abs(sin(self.AoA))
     f = drag_narrow
-    player[2] += (L[0] - f * _mag * player[2])/mass
-    player[3] += (L[1] - g * mass - f * _mag * player[3])/mass
+    player[2] += (L[0] - f * _mag * player[2]) / mass
+    player[3] += (L[1] - g * mass - f * _mag * player[3]) / mass
     player[0] += player[2] * timedelta
     player[1] -= player[3] * timedelta
     player[7] += timedelta
 
+
 def update(player, brain):
     player[4] = evaluate(player, brain)
 
+
 def construct_player(target):
     return [
-        0, # x
-        0, # y
-        0, # vx
-        0, # vy
-        0, # theta
-        target[0], # target x
-        target[1], # target y
-        0, # time
-        True, # alive
-        0 # fitness
+        0,  # x
+        0,  # y
+        0,  # vx
+        0,  # vy
+        0,  # theta
+        target[0],  # target x
+        target[1],  # target y
+        0,  # time
+        True,  # alive
+        0,  # fitness
     ]
 
 
 def reset(player):
-    player[0:5] = [0,0,0,0,0]
+    player[0:5] = [0, 0, 0, 0, 0]
     player[7] = 0
     player[-2] = True
     player[-1] = 0
@@ -262,8 +272,9 @@ def construct_player_and_brain(target, params=None):
     else:
         print("constructing brain from params")
         brain = params[:]
-    update(player, brain) 
+    update(player, brain)
     return player, brain
+
 
 def construct_players_and_brains(DEST, filename=None):
     if should_read_training_data:
@@ -285,8 +296,9 @@ def construct_players_and_brains(DEST, filename=None):
         for i in range(N_PLAYERS):
             players.append(construct_player(DEST))
             brains.append(construct_brain())
-            update(players[-1], brains[-1]) 
+            update(players[-1], brains[-1])
     return players, brains
+
 
 def transform_pos(x=0, y=0):
     """returns the screen coordinates to draw pos"""
@@ -295,14 +307,14 @@ def transform_pos(x=0, y=0):
 
 def reverse_transform_position(x, y):
     """returns the approximate real coordinates that correspond to screen coordinates"""
-    return vsub([e*scale for e in [x,y]], OFFSET)
+    return vsub([e * scale for e in [x, y]], OFFSET)
 
 
 def redraw_screen(screen, DEST, color1, color2, color3, color4):
     screen.fill(color1)
 
     # pygame.draw.rect(screen, color2, pygame.Rect(vadd(OFFSET, (0, 0)), list(int(e / scale) for e in DEST)))
-    screen.blit(color2, vadd(OFFSET, (0,0)))
+    screen.blit(color2, vadd(OFFSET, (0, 0)))
     pygame.draw.circle(screen, color3, vadd(OFFSET, (0, 0)), 5)
     pygame.draw.circle(screen, color4, vadd(OFFSET, list(int(e / scale) for e in DEST)), 5)
 
@@ -310,10 +322,17 @@ def redraw_screen(screen, DEST, color1, color2, color3, color4):
 def player_fitness_formula(player):
     return fitness_formula(player[0], player[1], player[5], player[6], player[7])
 
-def fitness_formula(x, y, tx, ty, time):
-    return FITNESS_HYPERPARAMETER_HEIGHT * exp(-(mag(tx-x, ty-y) / FITNESS_HYPERPARAMETER_WIDTH) ** 2) - 2*time
 
-assert fitness_formula(0,0,0,0,0) == 30000
+def fitness_formula(x, y, tx, ty, time):
+    return (
+        FITNESS_HYPERPARAMETER_HEIGHT
+        * exp(-(mag(tx - x, ty - y) / FITNESS_HYPERPARAMETER_WIDTH) ** 2)
+        - 2 * time
+    )
+
+
+assert fitness_formula(0, 0, 0, 0, 0) == 30000
+
 
 def prepare_bg(tx, ty, SIZE, fitness_formula):
     surface = pygame.Surface((SIZE)).convert_alpha()
@@ -321,19 +340,24 @@ def prepare_bg(tx, ty, SIZE, fitness_formula):
         for x in range(0, SIZE[0], 10):
             nx, ny = reverse_transform_position(x, y)
             v = fitness_formula(nx, ny, tx, ty, 0)
-            v = 1+exp(-1) - exp(-v/30000)
+            v = 1 + exp(-1) - exp(-v / 30000)
             # print(pos, v)
-            surface.fill(pygame.Color(*[int(e*255) for e in colorsys.hls_to_rgb(v, 0.5, 0.5)]), (x,y, 10,10))
+            surface.fill(
+                pygame.Color(*[int(e * 255) for e in colorsys.hls_to_rgb(v, 0.5, 0.5)]),
+                (x, y, 10, 10),
+            )
     return surface
 
 
-def main(read_file="savedata.json", write_file = "savedata.json"):
+def main(read_file="savedata.json", write_file="savedata.json"):
     global HEADLESS
     if not HEADLESS:
 
         pygame.init()
 
-    SIZE = WIDTH, HEIGHT = (1920, 1080)
+    FLOOR = 10000
+    DEST = RANDOM_INITIAL, FLOOR
+    SIZE = WIDTH, HEIGHT = (int(DEST[0] / scale) + OFFSET[0], int(DEST[1] / scale) + OFFSET[1])
     if not HEADLESS:
         screen = pygame.display.set_mode(SIZE)
 
@@ -343,9 +367,6 @@ def main(read_file="savedata.json", write_file = "savedata.json"):
         GREEN = pygame.Color(0, 255, 0)
         RED = pygame.Color(255, 0, 0)
         GREY = pygame.Color(127, 127, 127)
-
-    FLOOR = 10000
-    DEST = RANDOM_INITIAL, FLOOR
 
     if not HEADLESS:
         WHITE_SURFACE = pygame.Surface((SIZE))
@@ -402,7 +423,9 @@ def main(read_file="savedata.json", write_file = "savedata.json"):
                             # exit and save
                             if should_write_training_data:
                                 with open("save_data.json", "w") as fd:
-                                    training_data = {"training_data": [player.brain.params for player in players]}
+                                    training_data = {
+                                        "training_data": [player.brain.params for player in players]
+                                    }
                                     json.dump(training_data, fd, indent=4)
                             pygame.quit()
                             return
@@ -426,8 +449,8 @@ def main(read_file="savedata.json", write_file = "savedata.json"):
                 simulate(player)
                 update(player, brain)
                 if player[-2] and out_of_bounds(player):
-                    player[-2] = False # assign alive status
-                    player[-1] = player_fitness_formula(player) # assign fitness
+                    player[-2] = False  # assign alive status
+                    player[-1] = player_fitness_formula(player)  # assign fitness
                     # print(player[-1])
                     if not headless_flag:
                         pygame.draw.circle(screen, RED, transform_pos(player[0], player[1]), 3)
@@ -435,8 +458,8 @@ def main(read_file="savedata.json", write_file = "savedata.json"):
                     alive_players_count -= 1
                     continue
                 if player[-2] and player[7] > TTL:
-                    player[-2] = False # assign alive status
-                    player[-1] = player_fitness_formula(player) # assign fitness
+                    player[-2] = False  # assign alive status
+                    player[-1] = player_fitness_formula(player)  # assign fitness
                     # print(player[-1])
                     if not headless_flag:
                         pygame.draw.circle(screen, RED, transform_pos(player[0], player[1]), 3)
@@ -449,7 +472,10 @@ def main(read_file="savedata.json", write_file = "savedata.json"):
             simulate(userPlayer)
             if not headless_flag:
                 userPlayer[4] = -atan2(
-                    *vsub([x * scale for x in vsub(pygame.mouse.get_pos()[::-1], OFFSET)], [userPlayer[1], userPlayer[0]])
+                    *vsub(
+                        [x * scale for x in vsub(pygame.mouse.get_pos()[::-1], OFFSET)],
+                        [userPlayer[1], userPlayer[0]],
+                    )
                 )
             else:
                 # userPlayer.theta = PI / 2
@@ -467,7 +493,10 @@ def main(read_file="savedata.json", write_file = "savedata.json"):
                     RED,
                     transform_pos(userPlayer[0], userPlayer[1]),
                     vadd(
-                        [3 * influence * cos(userPlayer[4]) / mass, -3 * influence * sin(userPlayer[4]) / mass],
+                        [
+                            3 * influence * cos(userPlayer[4]) / mass,
+                            -3 * influence * sin(userPlayer[4]) / mass,
+                        ],
                         transform_pos(userPlayer[0], userPlayer[1]),
                     ),
                     1,
@@ -477,10 +506,7 @@ def main(read_file="savedata.json", write_file = "savedata.json"):
                     screen,
                     BLACK,
                     transform_pos(userPlayer[0], userPlayer[1]),
-                    vadd(
-                        [LF[0], -LF[1]],
-                        transform_pos(userPlayer[0], userPlayer[1]),
-                    ),
+                    vadd([LF[0], -LF[1]], transform_pos(userPlayer[0], userPlayer[1])),
                     1,
                 )
                 pygame.draw.line(
@@ -488,8 +514,7 @@ def main(read_file="savedata.json", write_file = "savedata.json"):
                     BLACK,
                     transform_pos(userPlayer[0], userPlayer[1]),
                     vadd(
-                        [userPlayer[2], -userPlayer[3]],
-                        transform_pos(userPlayer[0], userPlayer[1]),
+                        [userPlayer[2], -userPlayer[3]], transform_pos(userPlayer[0], userPlayer[1])
                     ),
                     1,
                 )
@@ -497,7 +522,7 @@ def main(read_file="savedata.json", write_file = "savedata.json"):
             render_text(f"alive players = {alive_players_count}")
 
             if not headless_flag:
-                screen.blit(WHITE_SURFACE, (0,0), (0,0, longest_width+500, offset))
+                screen.blit(WHITE_SURFACE, (0, 0), (0, 0, longest_width + 500, offset))
                 for text_surface, pos in text_to_render:
                     screen.blit(text_surface, pos)
             if alive_players_count == 0:
@@ -508,7 +533,7 @@ def main(read_file="savedata.json", write_file = "savedata.json"):
             clear_text_buffer()
             frame += 1
         t2 = time.perf_counter()
-        print(t2-t1)
+        print(t2 - t1)
         best_fitness = max(*[e[-1] for e in players])
         new_target = random(RANDOM_LOWER_BOUND, RANDOM_UPPER_BOUND), FLOOR
         print("new target = " + str(new_target))
@@ -519,7 +544,7 @@ def main(read_file="savedata.json", write_file = "savedata.json"):
         print("performing genetic algorithm")
         brains = selection_crossover_and_breeding([p[-1] for p in players], brains)
         # assert len(set(id(e) for e in brains)) == len(brains)
-        players = players[:len(brains)]
+        players = players[: len(brains)]
         print("resetting players")
         print("player 0 before reset", players[0])
         for player in players:
@@ -529,7 +554,7 @@ def main(read_file="savedata.json", write_file = "savedata.json"):
         DEST = new_target
         reset(userPlayer)
         t3 = time.perf_counter()
-        print(t3-t2)
+        print(t3 - t2)
     if should_write_training_data:
         with open(write_file, "w") as fd:
             training_data = {"training_data": brains}
